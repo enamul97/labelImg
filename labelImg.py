@@ -4,11 +4,14 @@ import argparse
 import codecs
 import os.path
 import platform
+import pickle
 import shutil
 import sys
 import webbrowser as wb
 from functools import partial
 import pandas as pd
+from pyqtgraph import PlotWidget, plot
+import pyqtgraph as pg
 
 try:
     from PyQt5.QtGui import *
@@ -208,7 +211,24 @@ class MainWindow(QMainWindow, WindowMixin):
         self.canvas.selectionChanged.connect(self.shape_selection_changed)
         self.canvas.drawingPolygon.connect(self.toggle_drawing_sensitive)
 
-        self.setCentralWidget(scroll)
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.addWidget(scroll)
+
+        self.laser_plot_view = pg.PlotWidget()
+        self.laser_plot_view.setBackground('w')
+        self.laser_plot_view.setTitle("Laser data plot", color="b", size="30pt")
+        self.laser_plot_view.showGrid(x=True, y=True)
+        self.laser_plot_view.setXRange(0, 1100, padding=0)
+        self.laser_plot_view.setYRange(0, 10, padding=0)
+
+        scroll2 = QScrollArea()
+        scroll2.setWidget(self.laser_plot_view)
+        scroll2.setWidgetResizable(False)
+
+        layout.addWidget(scroll2)
+        self.setCentralWidget(widget)
+
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.file_dock)
         self.file_dock.setFeatures(QDockWidget.DockWidgetFloatable)
@@ -1097,6 +1117,18 @@ class MainWindow(QMainWindow, WindowMixin):
         for item, shape in self.items_to_shapes.items():
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
 
+    def update_laser_data_plot(self, curr_image_file_path):
+        self.laser_plot_view.clear()
+        index = self.m_img_list.index(curr_image_file_path)
+        laser_data_path = self.m_front_laser[index]
+        print(laser_data_path)
+        with open(laser_data_path, 'rb') as f:
+            laser = pickle.load(f)
+        #self.laser_plot_view_data_reference.setData(laser['ranges'])
+        pen = pg.mkPen(color=(0, 0, 255), width=12)
+        self.laser_plot_view.plot(laser['ranges'], pen=pen)
+
+
     def load_file(self, file_path=None):
         """Load the specified file, or the last opened file if None."""
         self.reset_state()
@@ -1165,6 +1197,7 @@ class MainWindow(QMainWindow, WindowMixin):
             self.add_recent_file(self.file_path)
             self.toggle_actions(True)
             self.show_bounding_box_from_annotation_file(self.file_path)
+            self.update_laser_data_plot(unicode_file_path)
 
             counter = self.counter_str()
             self.setWindowTitle(__appname__ + ' ' + file_path + ' ' + counter)
