@@ -8,6 +8,7 @@ import shutil
 import sys
 import webbrowser as wb
 from functools import partial
+import pandas as pd
 
 try:
     from PyQt5.QtGui import *
@@ -26,7 +27,7 @@ except ImportError:
 
 from libs.combobox import ComboBox
 from libs.default_label_combobox import DefaultLabelComboBox
-from libs.resources import *
+#from libs.resources import *
 from libs.constants import *
 from libs.utils import *
 from libs.settings import Settings
@@ -99,6 +100,9 @@ class MainWindow(QMainWindow, WindowMixin):
         self.last_open_dir = None
         self.cur_img_idx = 0
         self.img_count = len(self.m_img_list)
+        self.csv_path = None
+        self.last_csv_path = None
+        self.m_front_laser = []
 
         # Whether we need to save or not.
         self.dirty = False
@@ -219,6 +223,9 @@ class MainWindow(QMainWindow, WindowMixin):
 
         open = action(get_str('openFile'), self.open_file,
                       'Ctrl+O', 'open', get_str('openFileDetail'))
+
+        open_csv = action(get_str('openCSV'), self.open_CSV,
+                      'Ctrl+Y', 'open', get_str('openCSVDetail'))
 
         open_dir = action(get_str('openDir'), self.open_dir_dialog,
                           'Ctrl+u', 'open', get_str('openDir'))
@@ -390,7 +397,7 @@ class MainWindow(QMainWindow, WindowMixin):
                               lightBrighten=light_brighten, lightDarken=light_darken, lightOrg=light_org,
                               lightActions=light_actions,
                               fileMenuActions=(
-                                  open, open_dir, save, save_as, close, reset_all, quit),
+                                  open, open_dir, open_csv, save, save_as, close, reset_all, quit),
                               beginner=(), advanced=(),
                               editMenu=(edit, copy, delete,
                                         None, color1, self.draw_squares_option),
@@ -427,7 +434,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.display_label_option.triggered.connect(self.toggle_paint_labels_option)
 
         add_actions(self.menus.file,
-                    (open, open_dir, change_save_dir, open_annotation, copy_prev_bounding, self.menus.recentFiles, save, save_format, save_as, close, reset_all, delete_image, quit))
+                    (open, open_dir, open_csv, change_save_dir, open_annotation, copy_prev_bounding, self.menus.recentFiles, save, save_format, save_as, close, reset_all, delete_image, quit))
         add_actions(self.menus.help, (help_default, show_info, show_shortcut))
         add_actions(self.menus.view, (
             self.auto_saving,
@@ -449,12 +456,12 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.tools = self.toolbar('Tools')
         self.actions.beginner = (
-            open, open_dir, change_save_dir, open_next_image, open_prev_image, verify, save, save_format, None, create, copy, delete, None,
+            open, open_dir, open_csv, change_save_dir, open_next_image, open_prev_image, verify, save, save_format, None, create, copy, delete, None,
             zoom_in, zoom, zoom_out, fit_window, fit_width, None,
             light_brighten, light, light_darken, light_org)
 
         self.actions.advanced = (
-            open, open_dir, change_save_dir, open_next_image, open_prev_image, save, save_format, None,
+            open, open_dir, open_csv, change_save_dir, open_next_image, open_prev_image, save, save_format, None,
             create_mode, edit_mode, None,
             hide_all, show_all)
 
@@ -1337,8 +1344,34 @@ class MainWindow(QMainWindow, WindowMixin):
                 if isinstance(filename, (tuple, list)):
                     filename = filename[0]
 
-            self.load_create_ml_json_by_filename(filename, self.file_path)         
-        
+            self.load_create_ml_json_by_filename(filename, self.file_path)
+
+    def open_CSV(self, _value=False, csv_path=None, silent=False):
+        if not self.may_continue():
+            return
+        default_csv_path = csv_path if csv_path else '.'
+        if self.last_csv_path and os.path.exists(self.last_csv_path):
+            default_csv_path = self.last_csv_path
+        else:
+            default_csv_path = os.path.dirname(self.csv_path) if self.csv_path else '.'
+        if silent != True:
+            target_csv_path = QFileDialog.getOpenFileName(self, '%s - Open Directory' % __appname__, default_csv_path)[0]
+            print(target_csv_path)
+        self.csv_path = target_csv_path
+        if target_csv_path.lower().endswith(('.csv')):
+            #load images from csv + load laser data from csv
+            #self.import_dir_images(target_csv_path)
+            self.default_save_dir = target_csv_path
+            print(target_csv_path)
+            self.import_csv_images_laser_data(target_csv_path)
+        else:
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Information)
+            msgBox.setText("Invalid File type selected. Not a CSV file.")
+            msgBox.setWindowTitle("Warning")
+            msgBox.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+            returnValue = msgBox.exec()
+        return
 
     def open_dir_dialog(self, _value=False, dir_path=None, silent=False):
         if not self.may_continue():
@@ -1370,6 +1403,27 @@ class MainWindow(QMainWindow, WindowMixin):
         self.file_path = None
         self.file_list_widget.clear()
         self.m_img_list = self.scan_all_images(dir_path)
+        self.img_count = len(self.m_img_list)
+        self.open_next_image()
+        for imgPath in self.m_img_list:
+            item = QListWidgetItem(imgPath)
+            self.file_list_widget.addItem(item)
+
+    def import_csv_images_laser_data(self, csv_path):
+        if not self.may_continue() or not csv_path:
+            print("invalid CSV path: from import_csv_images_laser_data")
+
+        self.last_open_dir = csv_path
+        self.dir_name = csv_path
+        self.file_path = None
+        self.file_list_widget.clear()
+        df = pd.read_csv(csv_path)
+        img_list = df['img'].tolist()
+        front_laser = df['front_laser'].tolist()
+        print(img_list)
+        print(front_laser)
+        self.m_img_list = img_list
+        self.m_front_laser = front_laser
         self.img_count = len(self.m_img_list)
         self.open_next_image()
         for imgPath in self.m_img_list:
@@ -1448,6 +1502,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 filename = self.m_img_list[self.cur_img_idx]
 
         if filename:
+            print(f"image file being loaded {filename}")
             self.load_file(filename)
 
     def open_file(self, _value=False):
@@ -1679,6 +1734,7 @@ def read(filename, default=None):
         reader.setAutoTransform(True)
         return reader.read()
     except:
+        print("failed to load images")
         return default
 
 
