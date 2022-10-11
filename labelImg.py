@@ -77,9 +77,36 @@ class WindowMixin(object):
 class MainWindow(QMainWindow, WindowMixin):
     FIT_WINDOW, FIT_WIDTH, MANUAL_ZOOM = list(range(3))
 
+
     def __init__(self, default_filename=None, default_prefdef_class_file=None, default_save_dir=None):
         super(MainWindow, self).__init__()
         self.setWindowTitle(__appname__)
+
+        def annotate_image_traversible():
+             if not self.may_continue():
+                return
+             if self.last_csv_path and os.path.exists(self.last_csv_path):
+                default_csv_path = self.last_csv_path
+             else:
+                default_csv_path = os.path.dirname(self.csv_path) if self.csv_path else '.'
+             image_file_name = os.path.basename(self.file_path)
+             saved_file_name = os.path.splitext(image_file_name)[0]
+             saved_path = os.path.join(ustr(default_csv_path), saved_file_name)
+             self._save_file(saved_path, "Traversible")
+
+
+        def annotate_image_nontraversible():
+            if not self.may_continue():
+                return
+            if self.last_csv_path and os.path.exists(self.last_csv_path):
+                default_csv_path = self.last_csv_path
+            else:
+                default_csv_path = os.path.dirname(self.csv_path) if self.csv_path else '.'
+            image_file_name = os.path.basename(self.file_path)
+            saved_file_name = os.path.splitext(image_file_name)[0]
+            saved_path = os.path.join(ustr(default_csv_path), saved_file_name)
+            self._save_file(saved_path, "Non-Traversible")
+
 
         # Load setting in the main thread
         self.settings = Settings()
@@ -158,6 +185,20 @@ class MainWindow(QMainWindow, WindowMixin):
         # Create and add combobox for showing unique labels in group
         self.combo_box = ComboBox(self)
         list_layout.addWidget(self.combo_box)
+
+
+
+        self.button1 = QPushButton(self)
+        self.button1.setText("Traversible")
+        self.button1.clicked.connect(annotate_image_traversible)
+        list_layout.addWidget(self.button1)
+
+
+        self.button2 = QPushButton(self)
+        self.button2.setText("Non-Traversible")
+        self.button2.clicked.connect(annotate_image_nontraversible)
+        list_layout.addWidget(self.button2)
+
 
         # Create and add a widget for showing current label items
         self.label_list = QListWidget()
@@ -534,6 +575,9 @@ class MainWindow(QMainWindow, WindowMixin):
         # Add chris
         Shape.difficult = self.difficult
 
+
+
+
         def xbool(x):
             if isinstance(x, QVariant):
                 return x.toBool()
@@ -674,6 +718,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.file_path = None
         self.image_data = None
         self.label_file = None
+        #self.image_label = None
         self.canvas.reset_state()
         self.label_coordinates.clear()
         self.combo_box.cb.clear()
@@ -793,6 +838,7 @@ class MainWindow(QMainWindow, WindowMixin):
     def file_item_double_clicked(self, item=None):
         self.cur_img_idx = self.m_img_list.index(ustr(item.text()))
         filename = self.m_img_list[self.cur_img_idx]
+        print(filename)
         if filename:
             self.load_file(filename)
 
@@ -903,7 +949,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.combo_box.update_items(unique_text_list)
 
-    def save_labels(self, annotation_file_path):
+    def save_labels(self, annotation_file_path, image_label=None):
         annotation_file_path = ustr(annotation_file_path)
         if self.label_file is None:
             self.label_file = LabelFile()
@@ -923,8 +969,9 @@ class MainWindow(QMainWindow, WindowMixin):
             if self.label_file_format == LabelFileFormat.PASCAL_VOC:
                 if annotation_file_path[-4:].lower() != ".xml":
                     annotation_file_path += XML_EXT
+                print("Image label in labelImg is",image_label)
                 self.label_file.save_pascal_voc_format(annotation_file_path, shapes, self.file_path, self.image_data,
-                                                       self.line_color.getRgb(), self.fill_color.getRgb())
+                                                       self.line_color.getRgb(), self.fill_color.getRgb(), image_label=image_label)
             elif self.label_file_format == LabelFileFormat.YOLO:
                 if annotation_file_path[-4:].lower() != ".txt":
                     annotation_file_path += TXT_EXT
@@ -1119,15 +1166,17 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def update_laser_data_plot(self, curr_image_file_path):
         self.laser_plot_view.clear()
+        curr_image_file_path = curr_image_file_path.replace(os.sep, '/')
+        print(self.m_img_list)
         index = self.m_img_list.index(curr_image_file_path)
         laser_data_path = self.m_front_laser[index]
+        laser_data_path = laser_data_path.replace(os.sep, '/')
         print(laser_data_path)
         with open(laser_data_path, 'rb') as f:
             laser = pickle.load(f)
         #self.laser_plot_view_data_reference.setData(laser['ranges'])
         pen = pg.mkPen(color=(0, 0, 255), width=12)
         self.laser_plot_view.plot(laser['ranges'], pen=pen)
-
 
     def load_file(self, file_path=None):
         """Load the specified file, or the last opened file if None."""
@@ -1136,14 +1185,19 @@ class MainWindow(QMainWindow, WindowMixin):
         if file_path is None:
             file_path = self.settings.get(SETTING_FILENAME)
         # Make sure that filePath is a regular python string, rather than QString
+        print("file_path",file_path)
         file_path = ustr(file_path)
-
+        print("File path is",file_path)
         # Fix bug: An  index error after select a directory when open a new file.
-        unicode_file_path = ustr(file_path)
-        unicode_file_path = os.path.abspath(unicode_file_path)
+        unicode_file_path = file_path
+        #print("dkmld unicode_file_path",unicode_file_path)
+        #unicode_file_path = os.path.abspath(unicode_file_path)
+        print("unicode_file_path",unicode_file_path)
         # Tzutalin 20160906 : Add file list and dock to move faster
         # Highlight the file item
         if unicode_file_path and self.file_list_widget.count() > 0:
+            print("m_img_list",self.m_img_list)
+            print("unicode_file_path",unicode_file_path)
             if unicode_file_path in self.m_img_list:
                 index = self.m_img_list.index(unicode_file_path)
                 file_widget_item = self.file_list_widget.item(index)
@@ -1168,6 +1222,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 self.line_color = QColor(*self.label_file.lineColor)
                 self.fill_color = QColor(*self.label_file.fillColor)
                 self.canvas.verified = self.label_file.verified
+                #self.image_label = self.label_file.image_label
             else:
                 # Load image:
                 # read data first and store for saving into label file.
@@ -1186,6 +1241,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 return False
             self.status("Loaded %s" % os.path.basename(unicode_file_path))
             self.image = image
+            #self.image_label = self.label_file.image_label
             self.file_path = unicode_file_path
             self.canvas.load_pixmap(QPixmap.fromImage(image))
             if self.label_file:
@@ -1391,10 +1447,13 @@ class MainWindow(QMainWindow, WindowMixin):
             target_csv_path = QFileDialog.getOpenFileName(self, '%s - Open Directory' % __appname__, default_csv_path)[0]
             print(target_csv_path)
         self.csv_path = target_csv_path
+
         if target_csv_path.lower().endswith(('.csv')):
             #load images from csv + load laser data from csv
-            #self.import_dir_images(target_csv_path)
-            self.default_save_dir = target_csv_path
+            target_csv_dir='\\'.join(target_csv_path.split('\\')[0:-1])
+            print("target_csv_dir",target_csv_dir)
+            self.import_dir_images(target_csv_path)
+            self.default_save_dir = target_csv_dir
             print(target_csv_path)
             self.import_csv_images_laser_data(target_csv_path)
         else:
@@ -1589,8 +1648,8 @@ class MainWindow(QMainWindow, WindowMixin):
                 return full_file_path
         return ''
 
-    def _save_file(self, annotation_file_path):
-        if annotation_file_path and self.save_labels(annotation_file_path):
+    def _save_file(self, annotation_file_path, img_label=None):
+        if annotation_file_path and self.save_labels(annotation_file_path, img_label):
             self.set_clean()
             self.statusBar().showMessage('Saved to  %s' % annotation_file_path)
             self.statusBar().show()

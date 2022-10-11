@@ -22,6 +22,7 @@ class CreateMLWriter:
         self.shapes = shapes
         self.output_file = output_file
 
+
     def write(self):
         if os.path.isfile(self.output_file):
             with open(self.output_file, "r") as file:

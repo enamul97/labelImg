@@ -14,7 +14,9 @@ ENCODE_METHOD = DEFAULT_ENCODING
 
 class PascalVocWriter:
 
-    def __init__(self, folder_name, filename, img_size, database_src='Unknown', local_img_path=None):
+    def __init__(self, folder_name, filename, img_size, database_src='Unknown', local_img_path=None, image_label=None):
+        #print("Image label in pascal_voc_io is",image_label)
+        self.image_label = image_label
         self.folder_name = folder_name
         self.filename = filename
         self.database_src = database_src
@@ -22,6 +24,7 @@ class PascalVocWriter:
         self.box_list = []
         self.local_img_path = local_img_path
         self.verified = False
+
 
     def prettify(self, elem):
         """
@@ -45,6 +48,7 @@ class PascalVocWriter:
             return None
 
         top = Element('annotation')
+
         if self.verified:
             top.set('verified', 'yes')
 
@@ -57,6 +61,9 @@ class PascalVocWriter:
         if self.local_img_path is not None:
             local_img_path = SubElement(top, 'path')
             local_img_path.text = self.local_img_path
+
+        image_label = SubElement(top, 'image_label')
+        image_label.text = self.image_label
 
         source = SubElement(top, 'source')
         database = SubElement(source, 'database')
@@ -132,6 +139,7 @@ class PascalVocReader:
         self.shapes = []
         self.file_path = file_path
         self.verified = False
+        self.image_label = None
         try:
             self.parse_xml()
         except:

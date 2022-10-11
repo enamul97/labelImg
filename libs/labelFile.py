@@ -44,6 +44,7 @@ class LabelFile(object):
         image.load(image_path)
         image_shape = [image.height(), image.width(),
                        1 if image.isGrayscale() else 3]
+        print("Came to save_create_ml_format")
         writer = CreateMLWriter(img_folder_name, img_file_name,
                                 image_shape, shapes, filename, local_img_path=image_path)
         writer.verified = self.verified
@@ -52,10 +53,12 @@ class LabelFile(object):
 
 
     def save_pascal_voc_format(self, filename, shapes, image_path, image_data,
-                               line_color=None, fill_color=None, database_src=None):
+                               line_color=None, fill_color=None, database_src=None, image_label=None):
+        print("Image label in LabelFile is",image_label)
         img_folder_path = os.path.dirname(image_path)
         img_folder_name = os.path.split(img_folder_path)[-1]
         img_file_name = os.path.basename(image_path)
+        print("Came to save_pascal_voc_format")
         # imgFileNameWithoutExt = os.path.splitext(img_file_name)[0]
         # Read from file path because self.imageData might be empty if saving to
         # Pascal format
@@ -67,7 +70,7 @@ class LabelFile(object):
         image_shape = [image.height(), image.width(),
                        1 if image.isGrayscale() else 3]
         writer = PascalVocWriter(img_folder_name, img_file_name,
-                                 image_shape, local_img_path=image_path)
+                                 image_shape, local_img_path=image_path, image_label=image_label)
         writer.verified = self.verified
 
         for shape in shapes:
@@ -77,6 +80,7 @@ class LabelFile(object):
             difficult = int(shape['difficult'])
             bnd_box = LabelFile.convert_points_to_bnd_box(points)
             writer.add_bnd_box(bnd_box[0], bnd_box[1], bnd_box[2], bnd_box[3], label, difficult)
+
 
         writer.save(target_file=filename)
         return
@@ -89,6 +93,7 @@ class LabelFile(object):
         # imgFileNameWithoutExt = os.path.splitext(img_file_name)[0]
         # Read from file path because self.imageData might be empty if saving to
         # Pascal format
+        print("Came to save_yolo_format")
         if isinstance(image_data, QImage):
             image = image_data
         else:

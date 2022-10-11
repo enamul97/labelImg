@@ -44,8 +44,9 @@ class StringBundle:
         return StringBundle(cls.__create_key, locale_str)
 
     def get_string(self, string_id):
-        assert(string_id in self.id_to_message), "Missing string id : " + string_id
-        return self.id_to_message[string_id]
+        #assert(string_id in self.id_to_message), "Missing string id : " + string_id
+        #return self.id_to_message[string_id]
+        return string_id
 
     def __create_lookup_fallback_list(self, locale_str):
         result_paths = []
